@@ -1,0 +1,6 @@
+# Ignore compiled content and dependencies
+#
+/elm-stuff
+/node_modules
+/dist
+/index.html
