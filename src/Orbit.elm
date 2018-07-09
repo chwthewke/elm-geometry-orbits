@@ -1,23 +1,23 @@
 module Orbit
     exposing
-        ( Orbit
+        ( OrbitData
+        , Orbit
+        , fromData
         , semiMajorAxis
+        , semiMinorAxis
         , eccentricity
         , inclination
         , longitudeOfAscendingNode
         , argumentOfPeriapsis
         , meanAnomalyAtEpoch
-        , orbitSplines
+        , orbitPeriod
+        , trueAnomalyAt
         )
 
-import Axis3d exposing (Axis3d)
-import CubicSpline3d exposing (CubicSpline3d)
-import Frame3d exposing (Frame3d)
-import Point3d exposing (Point3d)
-import Vector3d exposing (Vector3d)
+import Time.DateTime as DateTime exposing (DateTime)
 
 
-type alias Orbit =
+type alias OrbitData =
     { sma : Float
     , ecc : Float
     , inc : Float
@@ -27,96 +27,162 @@ type alias Orbit =
     }
 
 
+type Orbit
+    = Orbit OrbitData
+
+
+orbitData : Orbit -> OrbitData
+orbitData (Orbit data) =
+    data
+
+
+fromData : OrbitData -> Orbit
+fromData =
+    Orbit
+
+
 semiMajorAxis : Orbit -> Float
 semiMajorAxis =
-    .sma
+    .sma << orbitData
 
 
 semiMinorAxis : Orbit -> Float
 semiMinorAxis orbit =
-    orbit.sma * orbit.sma * (1 - orbit.ecc * orbit.ecc) |> sqrt
+    let
+        a =
+            semiMajorAxis orbit
+
+        e =
+            eccentricity orbit
+    in
+        sqrt (a ^ 2 * (1 - e ^ 2))
 
 
 eccentricity : Orbit -> Float
 eccentricity =
-    .ecc
+    .ecc << orbitData
 
 
 inclination : Orbit -> Float
 inclination =
-    .inc
+    .inc << orbitData
 
 
 longitudeOfAscendingNode : Orbit -> Float
 longitudeOfAscendingNode =
-    .lan
+    .lan << orbitData
 
 
 argumentOfPeriapsis : Orbit -> Float
 argumentOfPeriapsis =
-    .argp
+    .argp << orbitData
 
 
 meanAnomalyAtEpoch : Orbit -> Float
 meanAnomalyAtEpoch =
-    .ma0
+    .ma0 << orbitData
 
 
-orbitFrame : Orbit -> Frame3d
-orbitFrame orbit =
-    Frame3d.xyz
-        |> Frame3d.translateBy (Vector3d.fromComponents ( orbit.sma * orbit.ecc, 0, 0 ))
-        |> Frame3d.rotateAround Axis3d.z orbit.argp
-        |> Frame3d.rotateAround Axis3d.x orbit.inc
-        |> Frame3d.rotateAround Axis3d.z orbit.lan
-
-
-{-|
-    Vector from center to periapsis
--}
-semiMajorAxisVector : Orbit -> Vector3d
-semiMajorAxisVector orbit =
-    Vector3d.fromComponents ( orbit.sma, 0, 0 )
-        |> Vector3d.placeIn (orbitFrame orbit)
-
-
-semiMinorAxisVector : Orbit -> Vector3d
-semiMinorAxisVector orbit =
-    Vector3d.fromComponents ( 0, semiMinorAxis orbit, 0 )
-        |> Vector3d.placeIn (orbitFrame orbit)
+epochJ2000 : DateTime
+epochJ2000 =
+    DateTime.dateTime
+        { year = 2000
+        , month = 1
+        , day = 1
+        , hour = 11
+        , minute = 58
+        , second = 55
+        , millisecond = 816
+        }
 
 
 {-|
-    Vector from center to focus closer to periapsis
+    Solar mass parameter, in AU^3/s^2
 -}
-focusVector : Orbit -> Vector3d
-focusVector orbit =
-    Vector3d.fromComponents ( orbit.sma * orbit.ecc, 0, 0 )
-        |> Vector3d.placeIn (orbitFrame orbit)
+mu : Float
+mu =
+    3.964016055e-14
 
 
-orbitSplines : Orbit -> List CubicSpline3d
-orbitSplines orbit =
+{-|
+    Orbit period in seconds
+-}
+orbitPeriod : Orbit -> Float
+orbitPeriod orbit =
     let
-        magic : Float
-        magic =
-            0.551784
-
         a =
-            orbit.sma
-
-        b =
-            semiMinorAxis orbit
-
-        pointInOrbitFrame ( x, y ) =
-            Point3d.fromCoordinatesIn (orbitFrame orbit) ( x, y, 0 )
-
-        spline sx sy =
-            CubicSpline3d.with
-                { startPoint = pointInOrbitFrame ( sx * a, 0 )
-                , startControlPoint = pointInOrbitFrame ( sx * a, sy * magic * b )
-                , endControlPoint = pointInOrbitFrame ( sx * magic * a, sy * b )
-                , endPoint = pointInOrbitFrame ( 0, sy * b )
-                }
+            semiMajorAxis orbit
     in
-        [ spline 1 1, spline (-1) 1, spline (-1) (-1), spline 1 (-1) ]
+        2 * pi * sqrt (a ^ 3 / mu)
+
+
+meanAnomalyAt : Orbit -> DateTime -> Float
+meanAnomalyAt orbit t =
+    let
+        fmod : Float -> Float -> Float
+        fmod x m =
+            x - m * toFloat (floor (x / m))
+
+        tau =
+            2 * pi
+
+        delta =
+            (DateTime.delta t epochJ2000).seconds
+
+        ma =
+            meanAnomalyAtEpoch orbit + (toFloat delta / orbitPeriod orbit * tau)
+    in
+        fmod (fmod ma tau + tau) tau
+
+
+meanToEccentricAnomaly : Orbit -> Float -> Float
+meanToEccentricAnomaly orbit ma =
+    let
+        e =
+            eccentricity orbit
+
+        f ea =
+            ea - e * sin ea - ma
+
+        df ea =
+            1 - e * cos ea
+
+        dea ea =
+            -(f ea) / df ea
+
+        next ean =
+            ean + dea ean
+
+        loop ean =
+            let
+                ean1 =
+                    next ean
+            in
+                if abs (ean1 - ean) < 0.0001 then
+                    ean1
+                else
+                    loop ean1
+
+        ea0 =
+            if e > 0.8 then
+                pi
+            else
+                ma
+    in
+        loop ea0
+
+
+eccentricToTrueAnomaly : Orbit -> Float -> Float
+eccentricToTrueAnomaly orbit ea =
+    let
+        e =
+            eccentricity orbit
+    in
+        2 * atan2 (sqrt (1 + e) * sin (ea / 2)) (sqrt (1 - e) * cos (ea / 2))
+
+
+trueAnomalyAt : Orbit -> DateTime -> Float
+trueAnomalyAt orbit =
+    meanAnomalyAt orbit
+        >> meanToEccentricAnomaly orbit
+        >> eccentricToTrueAnomaly orbit
