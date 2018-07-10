@@ -1,14 +1,15 @@
 module Main exposing (..)
 
-import Time.DateTime as DateTime exposing (DateTime)
+import AnimationFrame
 import Circle2d
 import Html exposing (Html)
 import Point3d
 import Svg exposing (Svg)
 import Svg.Attributes as SA
 import Geometry.Svg as Svg
+import Time exposing (Time)
 import Time.DateTime as DateTime exposing (DateTime)
-import Time exposing (millisecond)
+import Time.Iso8601 as TI
 
 
 --
@@ -20,12 +21,12 @@ import Orbit.Render as Render exposing (RenderElement(..), RenderParams)
 
 type alias State =
     { time : DateTime
-    , delta : Int
+    , timeFactor : Float
     }
 
 
 type Msg
-    = Tick
+    = Tick Time
 
 
 initDateTime : DateTime
@@ -44,7 +45,7 @@ initDateTime =
 main : Program Never State Msg
 main =
     Html.program
-        { init = { time = initDateTime, delta = 0 } ! []
+        { init = { time = initDateTime, timeFactor = 864 } ! []
         , view = view
         , update = update
         , subscriptions = always subTime
@@ -53,16 +54,16 @@ main =
 
 subTime : Sub Msg
 subTime =
-    Time.every (100 * millisecond) (always Tick)
+    AnimationFrame.diffs Tick
 
 
 update : Msg -> State -> ( State, Cmd Msg )
-update msg st =
+update (Tick dt) st =
     let
-        newTime =
-            st.time |> DateTime.addDays 1
+        scaledDeltaTime =
+            st.timeFactor * (Time.inMilliseconds dt)
     in
-        { st | time = newTime, delta = (DateTime.delta newTime initDateTime).seconds } ! []
+        { st | time = st.time |> DateTime.addSeconds (floor scaledDeltaTime) } ! []
 
 
 viewport : Viewport
@@ -84,6 +85,16 @@ renderParams state body =
 
 view : State -> Html msg
 view st =
+    Html.div []
+        [ Html.div []
+            [ Html.text <| TI.fromDate <| DateTime.date st.time ]
+        , Html.div []
+            [ svg st ]
+        ]
+
+
+svg : State -> Html msg
+svg st =
     let
         bodies =
             [ mercury, venus, earth, mars ]
