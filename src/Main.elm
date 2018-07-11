@@ -14,80 +14,78 @@ import Time.Iso8601 as TI
 
 --
 
+import Controls exposing (Controls, Action(..), animationSpeed, currentTime)
+import Controls.View as Controls
 import Defs exposing (..)
 import Viewport exposing (Viewport)
 import Orbit.Render as Render exposing (RenderElement(..), RenderParams)
 
 
 type alias State =
-    { time : DateTime
-    , timeFactor : Float
-    }
+    Controls
 
 
-type Msg
-    = Tick Time
+type alias Msg =
+    Controls.Action
 
 
-initDateTime : DateTime
-initDateTime =
-    DateTime.dateTime
-        { year = 2000
-        , month = 7
-        , day = 9
-        , hour = 0
-        , minute = 14
-        , second = 0
-        , millisecond = 0
-        }
+
+--
+
+
+subscriptions : State -> Sub Msg
+subscriptions controls =
+    let
+        updateTime : State -> Time -> Msg
+        updateTime st time =
+            SetDateTime
+                (Controls.UpdateField
+                    currentTime
+                 <|
+                    Just <|
+                        (DateTime.addSeconds
+                            (floor (Time.inMilliseconds time * animationSpeed.get st * 86.4))
+                            (currentTime.get st)
+                        )
+                )
+    in
+        if Controls.isAnimating controls then
+            AnimationFrame.diffs (updateTime controls)
+        else
+            Sub.none
 
 
 main : Program Never State Msg
 main =
     Html.program
-        { init = { time = initDateTime, timeFactor = 864 } ! []
+        { init = Controls.init ! []
         , view = view
         , update = update
-        , subscriptions = always subTime
+        , subscriptions = subscriptions
         }
 
 
-subTime : Sub Msg
-subTime =
-    AnimationFrame.diffs Tick
-
-
 update : Msg -> State -> ( State, Cmd Msg )
-update (Tick dt) st =
-    let
-        scaledDeltaTime =
-            st.timeFactor * (Time.inMilliseconds dt)
-    in
-        { st | time = st.time |> DateTime.addSeconds (floor scaledDeltaTime) } ! []
-
-
-viewport : Viewport
-viewport =
-    Viewport 800 800 200.0 0 (pi / 2)
+update msg st =
+    Controls.update msg st ! []
 
 
 renderParams : State -> CelestialBody -> RenderParams
 renderParams state body =
     { mainColor = body.color
     , outlineColor = "white"
-    , viewport = viewport
+    , viewport = Controls.viewport state
     , elements =
         [ Splines
-        , PositionAt state.time
+        , PositionAt <| currentTime.get state
         ]
     }
 
 
-view : State -> Html msg
+view : State -> Html Msg
 view st =
     Html.div []
-        [ Html.div []
-            [ Html.text <| TI.fromDate <| DateTime.date st.time ]
+        [ Controls.view st
         , Html.div []
             [ svg st ]
         ]
@@ -106,10 +104,10 @@ svg st =
             bodies |> List.concatMap renderBody
 
         vw =
-            toString viewport.width
+            toString (Controls.viewport st).width
 
         vh =
-            toString viewport.height
+            toString (Controls.viewport st).height
 
         vb =
             "0 0 " ++ vw ++ " " ++ vh
@@ -118,7 +116,7 @@ svg st =
             [ SA.width vw, SA.height vh, SA.viewBox vb ]
         <|
             Svg.rect [ SA.x "0", SA.y "0", SA.width vw, SA.height vh, SA.fill "black" ] []
-                :: renderSun viewport
+                :: renderSun (Controls.viewport st)
                 :: bodiesSvg
 
 

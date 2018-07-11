@@ -1,4 +1,15 @@
-module Defs exposing (CelestialBody, mercury, venus, earth, mars)
+module Defs
+    exposing
+        ( CelestialBody
+        , PredefLocation
+        , mercury
+        , venus
+        , earth
+        , mars
+        , predefLocations
+        , toRadians
+        , toDegrees
+        )
 
 import Orbit exposing (Orbit)
 
@@ -14,6 +25,9 @@ toRadians : Float -> Float
 toRadians degrees =
     degrees / 180.0 * pi
 
+toDegrees : Float -> Float
+toDegrees radians =
+    radians / pi * 180.0
 
 mercury : CelestialBody
 mercury =
@@ -77,3 +91,15 @@ mars =
             }
     , color = "indianred"
     }
+
+
+type alias PredefLocation =
+    { name : String
+    , scale : Float
+    }
+
+
+predefLocations : List PredefLocation
+predefLocations =
+    [ PredefLocation "Inner system" 200.0
+    ]
