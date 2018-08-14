@@ -10,7 +10,6 @@ import Result exposing (Result(..))
 
 --
 
-import Defs exposing (toDegrees, toRadians)
 import Controls exposing (Controls)
 
 
@@ -108,7 +107,6 @@ validateDegrees : ( Float, Float ) -> String -> Validation Float
 validateDegrees bounds =
     String.toFloat
         >> toValidation (clamp bounds)
-        >> mapValidation toRadians
 
 
 fieldScale : Field Float
@@ -124,12 +122,12 @@ fieldScale =
 
 fieldTheta : Field Float
 fieldTheta =
-    Field "Theta" "number" (validateDegrees ( -180, 180 )) (toString << toDegrees) Controls.theta
+    Field "Theta" "number" (validateDegrees ( -180, 180 )) toString Controls.theta
 
 
 fieldPhi : Field Float
 fieldPhi =
-    Field "Phi" "number" (validateDegrees ( -90, 90 )) (toString << toDegrees) Controls.phi
+    Field "Phi" "number" (validateDegrees ( -90, 90 )) toString Controls.phi
 
 
 view : Controls -> Html Controls.Action
@@ -139,6 +137,9 @@ view controls =
         [ field fieldScale Controls.SetFloat controls
         , field fieldTheta Controls.SetFloat controls
         , field fieldPhi Controls.SetFloat controls
+        , HH.button [ HE.onClick Controls.Play ] [ HH.text "Play" ]
+        , HH.button [ HE.onClick Controls.Pause ] [ HH.text "Pause" ]
+        , HH.button [ HE.onClick Controls.Stop ] [ HH.text "Stop" ]
         ]
 
 

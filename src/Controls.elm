@@ -21,7 +21,7 @@ import Time.DateTime as DateTime exposing (DateTime, zero)
 
 --
 
-import Defs exposing (PredefLocation)
+import Defs exposing (PredefLocation, toRadians)
 import Viewport exposing (Viewport)
 
 
@@ -86,7 +86,7 @@ init =
     Controls
         { scale = 200.0
         , theta = 0.0
-        , phi = pi / 2
+        , phi = 90.0
         , currentTime = DateTime.dateTime { zero | year = 2000 }
         , animationSpeed = 10.0
         , animatingFrom = Nothing
@@ -95,7 +95,7 @@ init =
 
 viewport : Controls -> Viewport
 viewport (Controls c) =
-    Viewport 800 800 c.scale c.theta c.phi
+    Viewport 800 800 c.scale (toRadians c.theta) (toRadians c.phi)
 
 
 type alias UpdateField a =
